@@ -1,0 +1,6 @@
+﻿ID,Zona,Ubicación (GPS),Tipo de residuo,Peso estimado (kg),Fecha de registro,Observaciones
+1,Norte,"-8.111, -79.028",Plástico,5.2,2025-09-10,Cerca de juegos infantiles
+2,Sur,"-8.112, -79.029",Orgánico,3.1,2025-09-10,Restos de comida y hojas acumuladas
+3,Oeste,"-8.113, -79.027",Vidrio/Metal,1.8,2025-09-10,Botellas rotas junto a la banca
+4,Este,"-8.114, -79.026",Papel/Cartón,2.4,2025-09-11,Papeles cerca de la entrada principal
+5,Centro,"-8.115, -79.025",Otros,0.9,2025-09-11,Desechos varios dispersos en zona central
