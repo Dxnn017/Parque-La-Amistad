@@ -844,7 +844,6 @@ def main():
         st.markdown("""
         <div style='text-align: center; color: #666; padding: 1rem; background: #f8f9fa; border-radius: 10px; margin-top: 2rem;'>
             <p><strong>🌳 Sistema de Gestión de Residuos Sólidos - Parque La Amistad</strong></p>
-            <p>Versión mejorada con validaciones robustas y manejo de errores</p>
             <p><small>Desarrollado para la conservación y monitoreo ambiental comunitario</small></p>
         </div>
         """, unsafe_allow_html=True)
