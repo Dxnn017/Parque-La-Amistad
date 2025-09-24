@@ -791,7 +791,7 @@ def main():
             <h1>🌳 Sistema de Gestión de Residuos Sólidos</h1>
             <h2>Parque La Amistad</h2>
             <p>Monitoreo, registro y análisis integral de residuos para la conservación ambiental</p>
-            <small>Sistema mejorado con validaciones robustas y manejo de errores</small>
+            <small>Sistema básico de registro y control de residuos</small>
         </div>
         """, unsafe_allow_html=True)
         
