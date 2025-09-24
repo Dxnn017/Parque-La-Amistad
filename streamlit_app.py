@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import numpy as np
+import io
 
 # Configuración de la página
 st.set_page_config(
@@ -37,72 +38,74 @@ st.markdown("""
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
+    .positive-response {
+        background-color: #e8f5e8;
+        padding: 10px;
+        border-radius: 5px;
+        border-left: 4px solid #4CAF50;
+    }
+    .negative-response {
+        background-color: #ffebee;
+        padding: 10px;
+        border-radius: 5px;
+        border-left: 4px solid #f44336;
+    }
+    .neutral-response {
+        background-color: #fff3e0;
+        padding: 10px;
+        border-radius: 5px;
+        border-left: 4px solid #ff9800;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Datos de ejemplo (simulando la base de datos)
+# Cargar datos reales de los archivos CSV proporcionados
 @st.cache_data
-def load_sample_data():
+def load_real_data():
+    # Datos de encuestas
+    encuesta_data = pd.read_csv('encuesta_respuestas.csv')
+    
     # Datos de residuos
-    residuos_data = {
-        'ID': [1, 2, 3, 4, 5, 6, 7, 8],
-        'Zona': ['Norte', 'Sur', 'Oeste', 'Este', 'Centro', 'Norte', 'Sur', 'Centro'],
-        'Ubicación (GPS)': ['-8.111, -79.028', '-8.112, -79.029', '-8.113, -79.027', 
-                           '-8.114, -79.026', '-8.115, -79.025', '-8.116, -79.024',
-                           '-8.117, -79.023', '-8.118, -79.022'],
-        'Tipo de residuo': ['Plástico', 'Orgánico', 'Vidrio/Metal', 'Papel/Cartón', 
-                           'Otros', 'Plástico', 'Orgánico', 'Papel/Cartón'],
-        'Peso estimado (kg)': [5.2, 3.1, 1.8, 2.4, 0.9, 4.3, 2.7, 1.6],
-        'Fecha de registro': ['2025-01-10', '2025-01-10', '2025-01-10', '2025-01-11',
-                             '2025-01-11', '2025-01-12', '2025-01-12', '2025-01-13'],
-        'Observaciones': ['Cerca de juegos infantiles', 'Restos de comida y hojas acumuladas',
-                         'Botellas rotas junto a la banca', 'Papeles cerca de la entrada principal',
-                         'Desechos varios dispersos en zona central', 'Bolsas plásticas en área verde',
-                         'Residuos orgánicos en descomposición', 'Periódicos y cartones mojados']
-    }
+    residuos_data = pd.read_csv('residuos_parque.csv')
     
     # Datos de zonas críticas
-    zonas_criticas_data = {
-        'Código de Zona': ['Z1', 'Z2', 'Z3', 'Z4'],
-        'Sector del Parque': ['Área verde con plantas', 'Césped lateral', 'Cerca de bancas', 'Zona junto a techo'],
-        'Descripción de Residuos': [
-            'Encuentros y restos de construcción mezclados con basura común',
-            'Plásticos y papeles dispersos en el césped',
-            'Botellas, envolturas y residuos de comida en bancas',
-            'Desechos acumulados en el suelo a pesar de la presencia de techo cercano'
-        ],
-        'Tipo de Residuos Predominantes': ['Inorgánicos', 'Plásticos/Papel', 'Orgánicos/Inorgánicos', 'Mixto'],
-        'Nivel de Riesgo': ['Alto', 'Medio', 'Medio', 'Bajo'],
-        'Observaciones': [
-            'Riesgo de proliferación de insectos y deterioro del área verde',
-            'Afecta la estética y puede atraer animales',
-            'Zona de tránsito de personas y animales domésticos',
-            'Indica problemas en el uso adecuado de tachos de basura'
-        ]
-    }
+    zonas_criticas_data = pd.read_csv('zonas_criticas.csv')
     
-    # Datos de encuestas
-    encuestas_data = {
-        'ID': range(1, 51),
-        'Edad': np.random.choice(['18-25', '26-35', '36-45', '46-55', '56+'], 50),
-        'Frecuencia_Visita': np.random.choice(['Diario', 'Semanal', 'Mensual', 'Ocasional'], 50),
-        'Percepcion_Limpieza': np.random.choice([1, 2, 3, 4, 5], 50, p=[0.1, 0.2, 0.3, 0.3, 0.1]),
-        'Dispuesto_Colaborar': np.random.choice(['Sí', 'No', 'Tal vez'], 50, p=[0.6, 0.1, 0.3]),
-        'Fecha': pd.date_range('2025-01-01', periods=50, freq='D').strftime('%Y-%m-%d')
-    }
-    
-    return (pd.DataFrame(residuos_data), 
-            pd.DataFrame(zonas_criticas_data), 
-            pd.DataFrame(encuestas_data))
+    return encuesta_data, residuos_data, zonas_criticas_data
 
 # Cargar datos
-residuos_df, zonas_df, encuestas_df = load_sample_data()
+encuesta_df, residuos_df, zonas_df = load_real_data()
+
+# Preprocesamiento de datos de encuestas
+# Crear columnas numéricas para análisis
+def preprocess_survey_data(df):
+    # Mapear respuestas Sí/No a valores numéricos para análisis
+    binary_mapping = {'Sí': 1, 'No': 0, 'Tal vez': 0.5, 'Posiblemente': 0.5, 'Podría ser': 0.5}
+    
+    # Columnas a convertir
+    binary_columns = [
+        '¿Considera que el parque de la Amistad cumple una función importante en la preservación del medio ambiente urbano?',
+        '¿ Piensa que la contaminación dentro del parque refleja el nivel de educación ambiental de la comunidad?',
+        '¿ Ha notado que los eventos y actividades dentro del parque generan más residuos de lo habitual?',
+        '¿ Cree que los tachos de basura y puntos de reciclaje están bien distribuidos en el parque?',
+        '¿ Considera que la implementación de un sistema de gestión de residuos ( con tachos diferenciados y puntos de reciclaje) mejoraría significativamente la limpieza del parque "La Amistad"?',
+        '¿ Cree necesario implementar campañas de sensibilización sobre la tenencia responsable de mascotas dentro del parque?',
+        '¿ consideras que la propuesta "Amistad Sostenible" puede generar un cambio positivo en la conciencia ambiental de la comunidad?',
+        '¿ Estarías dispuesto a promover el proyecto del parque dentro de su círculo social o familiar?'
+    ]
+    
+    for col in binary_columns:
+        df[col + '_num'] = df[col].map(binary_mapping)
+    
+    return df
+
+encuesta_df = preprocess_survey_data(encuesta_df)
 
 # Header principal
 st.markdown("""
 <div class="main-header">
     <h1>🌳 Sistema de Gestión de Residuos</h1>
-    <h2>Parque La Amistad</h2>
+    <h2>Parque La Amistad - Proyecto "Amistad Sostenible"</h2>
     <p>Monitoreo y análisis integral de residuos para la conservación ambiental</p>
 </div>
 """, unsafe_allow_html=True)
@@ -111,7 +114,7 @@ st.markdown("""
 st.sidebar.title("📊 Navegación")
 page = st.sidebar.selectbox(
     "Selecciona una sección:",
-    ["Dashboard Principal", "Registro de Residuos", "Zonas Críticas", "Análisis de Encuestas", "Reportes"]
+    ["Dashboard Principal", "Análisis de Encuestas", "Registro de Residuos", "Zonas Críticas", "Reportes"]
 )
 
 if page == "Dashboard Principal":
@@ -124,7 +127,7 @@ if page == "Dashboard Principal":
         st.metric(
             label="Total Residuos Registrados",
             value=len(residuos_df),
-            delta=f"+{len(residuos_df[residuos_df['Fecha de registro'] >= '2025-01-12'])}"
+            delta=f"+{len(residuos_df)} desde inicio"
         )
     
     with col2:
@@ -132,7 +135,7 @@ if page == "Dashboard Principal":
         st.metric(
             label="Peso Total (kg)",
             value=f"{peso_total:.1f}",
-            delta=f"+{residuos_df[residuos_df['Fecha de registro'] >= '2025-01-12']['Peso estimado (kg)'].sum():.1f}"
+            delta=f"+{peso_total:.1f} kg acumulados"
         )
     
     with col3:
@@ -143,11 +146,11 @@ if page == "Dashboard Principal":
         )
     
     with col4:
-        participacion = len(encuestas_df)
+        participacion = len(encuesta_df)
         st.metric(
             label="Encuestas Completadas",
             value=participacion,
-            delta=f"+{len(encuestas_df[encuestas_df['Fecha'] >= '2025-01-10'])}"
+            delta=f"+{participacion} participantes"
         )
     
     # Gráficos principales
@@ -176,20 +179,122 @@ if page == "Dashboard Principal":
         )
         st.plotly_chart(fig_bar, use_container_width=True)
     
-    # Tendencias temporales
-    st.subheader("Tendencia de Registros por Fecha")
-    residuos_df['Fecha de registro'] = pd.to_datetime(residuos_df['Fecha de registro'])
-    daily_counts = residuos_df.groupby('Fecha de registro').size().reset_index(name='Cantidad')
+    # Resumen de encuestas
+    st.subheader("Resumen de Respuestas de Encuestas")
     
-    fig_line = px.line(
-        daily_counts, 
-        x='Fecha de registro', 
-        y='Cantidad',
-        title="Registros Diarios de Residuos",
-        markers=True
+    # Calcular porcentajes de respuestas positivas para preguntas clave
+    preguntas_clave = [
+        '¿Considera que el parque de la Amistad cumple una función importante en la preservación del medio ambiente urbano?',
+        '¿ Cree que los tachos de basura y puntos de reciclaje están bien distribuidos en el parque?',
+        '¿ consideras que la propuesta "Amistad Sostenible" puede generar un cambio positivo en la conciencia ambiental de la comunidad?',
+        '¿ Estarías dispuesto a promover el proyecto del parque dentro de su círculo social o familiar?'
+    ]
+    
+    porcentajes_positivos = []
+    for pregunta in preguntas_clave:
+        positivos = len(encuesta_df[encuesta_df[pregunta] == 'Sí'])
+        porcentaje = (positivos / len(encuesta_df)) * 100
+        porcentajes_positivos.append(porcentaje)
+    
+    fig_resumen = px.bar(
+        x=preguntas_clave, 
+        y=porcentajes_positivos,
+        title="Porcentaje de Respuestas Positivas a Preguntas Clave",
+        labels={'x': 'Pregunta', 'y': 'Porcentaje de "Sí" (%)'},
+        color=porcentajes_positivos,
+        color_continuous_scale='Viridis'
     )
-    fig_line.update_traces(line_color='#2d5a27')
-    st.plotly_chart(fig_line, use_container_width=True)
+    fig_resumen.update_layout(xaxis_tickangle=-45)
+    st.plotly_chart(fig_resumen, use_container_width=True)
+
+elif page == "Análisis de Encuestas":
+    st.header("📊 Análisis de Encuestas")
+    
+    # Métricas de encuestas
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Participantes", len(encuesta_df))
+    
+    with col2:
+        # Porcentaje que considera importante la función del parque
+        importante = len(encuesta_df[encuesta_df['¿Considera que el parque de la Amistad cumple una función importante en la preservación del medio ambiente urbano?'] == 'Sí'])
+        porcentaje_importante = (importante / len(encuesta_df)) * 100
+        st.metric("Considera importante el parque", f"{porcentaje_importante:.1f}%")
+    
+    with col3:
+        # Porcentaje que apoyaría el proyecto
+        apoyaria = len(encuesta_df[encuesta_df['¿ consideras que la propuesta "Amistad Sostenible" puede generar un cambio positivo en la conciencia ambiental de la comunidad?'] == 'Sí'])
+        porcentaje_apoyaria = (apoyaria / len(encuesta_df)) * 100
+        st.metric("Apoyaría el proyecto", f"{porcentaje_apoyaria:.1f}%")
+    
+    with col4:
+        # Porcentaje que promovería el proyecto
+        promocionaria = len(encuesta_df[encuesta_df['¿ Estarías dispuesto a promover el proyecto del parque dentro de su círculo social o familiar?'] == 'Sí'])
+        porcentaje_promocionaria = (promocionaria / len(encuesta_df)) * 100
+        st.metric("Promovería el proyecto", f"{porcentaje_promocionaria:.1f}%")
+    
+    # Gráficos de análisis
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Frecuencia de Visita al Parque")
+        frecuencia_counts = encuesta_df['¿ Con qué frecuencia visita el Parque de la amistad?'].value_counts()
+        fig_frecuencia = px.pie(
+            values=frecuencia_counts.values, 
+            names=frecuencia_counts.index,
+            title="Frecuencia de Visita al Parque"
+        )
+        st.plotly_chart(fig_frecuencia, use_container_width=True)
+    
+    with col2:
+        st.subheader("Distribución de Tachos de Basura")
+        tachos_counts = encuesta_df['¿ Cree que los tachos de basura y puntos de reciclaje están bien distribuidos en el parque?'].value_counts()
+        fig_tachos = px.bar(
+            x=tachos_counts.index, 
+            y=tachos_counts.values,
+            title="¿Los tachos de basura están bien distribuidos?",
+            color=tachos_counts.values,
+            color_continuous_scale='Blues'
+        )
+        st.plotly_chart(fig_tachos, use_container_width=True)
+    
+    # Análisis de percepciones
+    st.subheader("Percepción sobre la Contaminación y Educación Ambiental")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        contaminacion_counts = encuesta_df['¿ Piensa que la contaminación dentro del parque refleja el nivel de educación ambiental de la comunidad?'].value_counts()
+        fig_contaminacion = px.pie(
+            values=contaminacion_counts.values, 
+            names=contaminacion_counts.index,
+            title="¿La contaminación refleja la educación ambiental?"
+        )
+        st.plotly_chart(fig_contaminacion, use_container_width=True)
+    
+    with col2:
+        eventos_counts = encuesta_df['¿ Ha notado que los eventos y actividades dentro del parque generan más residuos de lo habitual?'].value_counts()
+        fig_eventos = px.bar(
+            x=eventos_counts.index, 
+            y=eventos_counts.values,
+            title="¿Los eventos generan más residuos?",
+            color=eventos_counts.values,
+            color_continuous_scale='Reds'
+        )
+        st.plotly_chart(fig_eventos, use_container_width=True)
+    
+    # Análisis de respuestas abiertas
+    st.subheader("Análisis de Respuestas Abiertas")
+    
+    # Mostrar algunas respuestas destacadas
+    st.write("**Respuestas sobre cómo la comunidad podría fortalecer el cuidado del parque:**")
+    
+    # Filtrar respuestas no vacías
+    respuestas_validas = encuesta_df[encuesta_df['¿ Cómo cree que la participación de la comunidad universitaria y local podría fortalecer  el cuidado del parque a largo plazo?'].notna()]
+    
+    for i, respuesta in enumerate(respuestas_validas['¿ Cómo cree que la participación de la comunidad universitaria y local podría fortalecer  el cuidado del parque a largo plazo?'].head(5)):
+        st.markdown(f'<div class="positive-response"><strong>Respuesta {i+1}:</strong> {respuesta}</div>', unsafe_allow_html=True)
 
 elif page == "Registro de Residuos":
     st.header("📝 Registro de Residuos")
@@ -201,7 +306,7 @@ elif page == "Registro de Residuos":
     with col2:
         tipo_filter = st.selectbox("Filtrar por Tipo:", ["Todos"] + list(residuos_df['Tipo de residuo'].unique()))
     with col3:
-        fecha_filter = st.date_input("Desde fecha:", value=pd.to_datetime('2025-01-10'))
+        fecha_filter = st.date_input("Desde fecha:", value=pd.to_datetime('2025-09-01'))
     
     # Aplicar filtros
     filtered_df = residuos_df.copy()
@@ -216,6 +321,13 @@ elif page == "Registro de Residuos":
     # Mostrar datos filtrados
     st.subheader(f"Registros Encontrados: {len(filtered_df)}")
     st.dataframe(filtered_df, use_container_width=True)
+    
+    # Mapa de residuos
+    st.subheader("Mapa de Residuos por Ubicación")
+    
+    # Extraer coordenadas GPS (simplificado para este ejemplo)
+    # En un caso real, se procesarían las coordenadas para visualización en mapa
+    st.info("Visualización de ubicaciones de residuos registrados (coordenadas GPS procesadas)")
     
     # Formulario para nuevo registro
     st.subheader("➕ Agregar Nuevo Registro")
@@ -255,67 +367,26 @@ elif page == "Zonas Críticas":
         x=riesgo_counts.index, 
         y=riesgo_counts.values,
         title="Distribución de Zonas por Nivel de Riesgo",
-        color=riesgo_counts.values,
-        color_continuous_scale=['green', 'yellow', 'red']
+        color=riesgo_counts.index,
+        color_discrete_map={'Alto': 'red', 'Medio': 'orange', 'Bajo': 'green'}
     )
     st.plotly_chart(fig_riesgo, use_container_width=True)
     
     # Tabla de zonas críticas
     st.subheader("Detalle de Zonas Críticas")
     st.dataframe(zonas_df, use_container_width=True)
-
-elif page == "Análisis de Encuestas":
-    st.header("📊 Análisis de Encuestas")
     
-    # Métricas de encuestas
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Participantes", len(encuestas_df))
-    with col2:
-        promedio_percepcion = encuestas_df['Percepcion_Limpieza'].mean()
-        st.metric("Percepción Promedio", f"{promedio_percepcion:.1f}/5")
-    with col3:
-        dispuestos = len(encuestas_df[encuestas_df['Dispuesto_Colaborar'] == 'Sí'])
-        porcentaje = (dispuestos / len(encuestas_df)) * 100
-        st.metric("Dispuestos a Colaborar", f"{porcentaje:.1f}%")
-    with col4:
-        visitantes_frecuentes = len(encuestas_df[encuestas_df['Frecuencia_Visita'].isin(['Diario', 'Semanal'])])
-        st.metric("Visitantes Frecuentes", visitantes_frecuentes)
+    # Análisis de correlación con datos de residuos
+    st.subheader("Correlación entre Zonas Críticas y Residuos Registrados")
     
-    # Gráficos de análisis
-    col1, col2 = st.columns(2)
+    # Agrupar residuos por zona
+    residuos_por_zona = residuos_df.groupby('Zona').agg({
+        'Peso estimado (kg)': 'sum',
+        'ID': 'count'
+    }).rename(columns={'ID': 'Cantidad de registros'}).reset_index()
     
-    with col1:
-        st.subheader("Percepción de Limpieza")
-        percepcion_counts = encuestas_df['Percepcion_Limpieza'].value_counts().sort_index()
-        fig_percepcion = px.bar(
-            x=percepcion_counts.index, 
-            y=percepcion_counts.values,
-            title="Distribución de Calificaciones (1-5)",
-            labels={'x': 'Calificación', 'y': 'Cantidad de Respuestas'}
-        )
-        st.plotly_chart(fig_percepcion, use_container_width=True)
-    
-    with col2:
-        st.subheader("Disposición a Colaborar")
-        colaborar_counts = encuestas_df['Dispuesto_Colaborar'].value_counts()
-        fig_colaborar = px.pie(
-            values=colaborar_counts.values, 
-            names=colaborar_counts.index,
-            title="¿Dispuesto a Colaborar?"
-        )
-        st.plotly_chart(fig_colaborar, use_container_width=True)
-    
-    # Análisis por edad
-    st.subheader("Análisis por Grupo Etario")
-    edad_percepcion = encuestas_df.groupby('Edad')['Percepcion_Limpieza'].mean().reset_index()
-    fig_edad = px.bar(
-        edad_percepcion, 
-        x='Edad', 
-        y='Percepcion_Limpieza',
-        title="Percepción Promedio por Grupo de Edad"
-    )
-    st.plotly_chart(fig_edad, use_container_width=True)
+    # Mostrar tabla comparativa
+    st.dataframe(residuos_por_zona, use_container_width=True)
 
 elif page == "Reportes":
     st.header("📋 Reportes y Exportación")
@@ -332,8 +403,8 @@ elif page == "Reportes":
     with col2:
         formato = st.selectbox("Formato:", ["PDF", "Excel", "CSV"])
     
-    fecha_inicio = st.date_input("Fecha de inicio:", value=pd.to_datetime('2025-01-01'))
-    fecha_fin = st.date_input("Fecha de fin:", value=pd.to_datetime('2025-01-31'))
+    fecha_inicio = st.date_input("Fecha de inicio:", value=pd.to_datetime('2025-09-01'))
+    fecha_fin = st.date_input("Fecha de fin:", value=pd.to_datetime('2025-09-30'))
     
     if st.button("Generar Reporte"):
         st.success(f"✅ Reporte {tipo_reporte} en formato {formato} generado exitosamente!")
@@ -352,18 +423,60 @@ elif page == "Reportes":
     
     with col2:
         st.write("**Estadísticas de Encuestas:**")
-        st.write(f"- Total participantes: {len(encuestas_df)}")
-        st.write(f"- Percepción promedio: {encuestas_df['Percepcion_Limpieza'].mean():.1f}/5")
-        dispuestos_pct = (len(encuestas_df[encuestas_df['Dispuesto_Colaborar'] == 'Sí']) / len(encuestas_df)) * 100
-        st.write(f"- Dispuestos a colaborar: {dispuestos_pct:.1f}%")
-        st.write(f"- Grupo etario más participativo: {encuestas_df['Edad'].mode()[0]}")
+        st.write(f"- Total participantes: {len(encuesta_df)}")
+        
+        # Calcular porcentaje de respuestas positivas para preguntas clave
+        preguntas_clave = [
+            '¿Considera que el parque de la Amistad cumple una función importante en la preservación del medio ambiente urbano?',
+            '¿ Cree que los tachos de basura y puntos de reciclaje están bien distribuidos en el parque?',
+            '¿ consideras que la propuesta "Amistad Sostenible" puede generar un cambio positivo en la conciencia ambiental de la comunidad?'
+        ]
+        
+        for pregunta in preguntas_clave:
+            positivos = len(encuesta_df[encuesta_df[pregunta] == 'Sí'])
+            porcentaje = (positivos / len(encuesta_df)) * 100
+            st.write(f"- {pregunta[:30]}...: {porcentaje:.1f}% Sí")
+    
+    # Exportar datos
+    st.subheader("Exportar Datos")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("Exportar Datos de Residuos"):
+            csv = residuos_df.to_csv(index=False)
+            st.download_button(
+                label="Descargar CSV",
+                data=csv,
+                file_name="residuos_parque_amistad.csv",
+                mime="text/csv"
+            )
+    
+    with col2:
+        if st.button("Exportar Datos de Encuestas"):
+            csv = encuesta_df.to_csv(index=False)
+            st.download_button(
+                label="Descargar CSV",
+                data=csv,
+                file_name="encuestas_parque_amistad.csv",
+                mime="text/csv"
+            )
+    
+    with col3:
+        if st.button("Exportar Datos de Zonas Críticas"):
+            csv = zonas_df.to_csv(index=False)
+            st.download_button(
+                label="Descargar CSV",
+                data=csv,
+                file_name="zonas_criticas_parque_amistad.csv",
+                mime="text/csv"
+            )
 
 # Footer
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 1rem;'>
-    <p>🌳 Sistema de Gestión de Residuos - Parque La Amistad</p>
+    <p>🌳 Sistema de Gestión de Residuos - Parque La Amistad - Proyecto "Amistad Sostenible"</p>
     <p>Desarrollado para la conservación y monitoreo ambiental</p>
 </div>
 """, unsafe_allow_html=True)
-
