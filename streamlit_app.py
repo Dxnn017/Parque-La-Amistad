@@ -4,8 +4,6 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import folium
-from streamlit_folium import st_folium
 from datetime import datetime, date
 import re
 import logging
@@ -14,6 +12,14 @@ from typing import Optional, Dict, List, Tuple
 import io
 from PIL import Image
 import base64
+
+try:
+    import folium
+    from streamlit_folium import st_folium
+    FOLIUM_AVAILABLE = True
+except ImportError:
+    FOLIUM_AVAILABLE = False
+    st.warning("⚠️ Folium no está disponible. Las funciones de mapas estarán deshabilitadas.")
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)
@@ -43,58 +49,76 @@ class DatasetManager:
         
         # Dataset 1: Residuos del parque
         residuos_data = {
-            'ID': [1, 2, 3, 4, 5],
-            'Zona': ['Norte', 'Sur', 'Oeste', 'Este', 'Centro'],
-            'Ubicación (GPS)': ['-8.111, -79.028', '-8.112, -79.029', '-8.113, -79.027', '-8.114, -79.026', '-8.115, -79.025'],
-            'Tipo de residuo': ['Plástico', 'Orgánico', 'Vidrio/Metal', 'Papel/Cartón', 'Otros'],
-            'Peso estimado (kg)': [5.2, 3.1, 1.8, 2.4, 0.9],
-            'Fecha de registro': ['2025-09-05', '2025-09-05', '2025-09-05', '2025-09-06', '2025-09-06'],
+            'ID': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            'Zona': ['Norte', 'Sur', 'Oeste', 'Este', 'Centro', 'Norte', 'Sur', 'Este', 'Oeste', 'Centro'],
+            'Ubicación (GPS)': [
+                '-8.111, -79.028', '-8.112, -79.029', '-8.113, -79.027', 
+                '-8.114, -79.026', '-8.115, -79.025', '-8.116, -79.024',
+                '-8.117, -79.023', '-8.118, -79.022', '-8.119, -79.021', '-8.120, -79.020'
+            ],
+            'Tipo de residuo': [
+                'Plástico', 'Orgánico', 'Vidrio/Metal', 'Papel/Cartón', 'Otros',
+                'Plástico', 'Orgánico', 'Papel/Cartón', 'Vidrio/Metal', 'Otros'
+            ],
+            'Peso estimado (kg)': [5.2, 3.1, 1.8, 2.4, 0.9, 4.5, 2.8, 3.2, 1.5, 2.1],
+            'Fecha de registro': [
+                '2025-09-05', '2025-09-05', '2025-09-05', '2025-09-06', '2025-09-06',
+                '2025-09-07', '2025-09-07', '2025-09-08', '2025-09-08', '2025-09-09'
+            ],
             'Observaciones': [
                 'Cerca de juegos infantiles',
                 'Restos de comida y hojas acumuladas',
                 'Botellas rotas junto a la banca',
                 'Papeles cerca de la entrada principal',
-                'Desechos varios dispersos en zona central'
+                'Desechos varios dispersos en zona central',
+                'Bolsas plásticas en área verde',
+                'Residuos orgánicos bajo los árboles',
+                'Cartones mojados por la lluvia',
+                'Latas de bebidas en sendero',
+                'Colillas y envolturas pequeñas'
             ]
         }
         
         # Dataset 2: Zonas críticas
         zonas_criticas_data = {
-            'Codigo de Zona': ['Z1', 'Z2', 'Z3', 'Z4'],
+            'Codigo de Zona': ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'],
             'Sector del Parque': [
                 'Area verde con plantas',
                 'Cesped lateral',
                 'Cerca de bancas',
-                'Zona junto a tacho'
+                'Zona junto a tacho',
+                'Sendero principal'
             ],
             'Descripcion de Residuos': [
                 'Escombros y restos de construccion mezclados con basura comun',
                 'Plasticos y papeles dispersos en el cesped',
                 'Botellas, envolturas y residuos de comida en bancas',
-                'Desechos acumulados en el suelo a pesar de la presencia de tacho cercano'
+                'Desechos acumulados en el suelo a pesar de la presencia de tacho cercano',
+                'Residuos esparcidos a lo largo del sendero principal'
             ],
-            'Tipo de Residuos Predominantes': ['Inorganicos', 'Plasticos/Papel', 'Organicos/Inorganicos', 'Mixto'],
-            'Nivel de Riesgo': ['Alto', 'Medio', 'Medio', 'Bajo'],
+            'Tipo de Residuos Predominantes': ['Inorganicos', 'Plasticos/Papel', 'Organicos/Inorganicos', 'Mixto', 'Plasticos'],
+            'Nivel de Riesgo': ['Alto', 'Medio', 'Medio', 'Bajo', 'Medio'],
             'Observaciones': [
                 'Riesgo de proliferacion de insectos y deterioro del area verde',
                 'Afecta la estetica y puede atraer animales',
                 'Zona de transito de personas y animales domesticos',
-                'Indica problemas en el uso adecuado de tachos de basura'
+                'Indica problemas en el uso adecuado de tachos de basura',
+                'Requiere limpieza frecuente por alto tráfico'
             ]
         }
         
         # Dataset 3: Encuestas (datos resumidos)
         encuestas_data = {
-            'ID_Respuesta': list(range(1, 11)),
-            'Frecuencia_Visita': ['Casi nunca'] * 7 + ['A veces', 'Pocas veces', 'Pocas veces'],
-            'Funcion_Ambiental': ['Sí'] * 7 + ['No'] * 3,
-            'Refleja_Educacion': ['No', 'Sí', 'Sí', 'No', 'Sí', 'Sí', 'Sí', 'No', 'Sí', 'No'],
-            'Eventos_Generan_Residuos': ['No', 'Sí', 'Sí', 'Sí', 'Sí', 'Sí', 'No', 'No', 'Sí', 'Sí'],
-            'Tachos_Bien_Distribuidos': ['Sí'] * 8 + ['No', 'No'],
-            'Sistema_Gestion_Mejoraria': ['Sí'] * 9 + ['Sí'],
-            'Campañas_Mascotas': ['Sí'] * 10,
-            'Proyecto_Cambio_Positivo': ['Sí'] * 9 + ['Sí'],
-            'Dispuesto_Promover': ['Sí'] * 6 + ['Tal vez'] * 4
+            'ID_Respuesta': list(range(1, 16)),
+            'Frecuencia_Visita': ['Casi nunca'] * 8 + ['A veces'] * 4 + ['Pocas veces'] * 3,
+            'Funcion_Ambiental': ['Sí'] * 12 + ['No'] * 3,
+            'Refleja_Educacion': ['No', 'Sí', 'Sí', 'No', 'Sí', 'Sí', 'Sí', 'No', 'Sí', 'No', 'Sí', 'Sí', 'No', 'Sí', 'Sí'],
+            'Eventos_Generan_Residuos': ['No', 'Sí'] * 7 + ['Sí'],
+            'Tachos_Bien_Distribuidos': ['Sí'] * 12 + ['No'] * 3,
+            'Sistema_Gestion_Mejoraria': ['Sí'] * 14 + ['No'],
+            'Campañas_Mascotas': ['Sí'] * 15,
+            'Proyecto_Cambio_Positivo': ['Sí'] * 14 + ['No'],
+            'Dispuesto_Promover': ['Sí'] * 10 + ['Tal vez'] * 5
         }
         
         # Crear DataFrames
@@ -115,7 +139,10 @@ class ValidadorDatos:
     @staticmethod
     def validar_coordenadas_gps(coordenadas: str) -> bool:
         """Valida formato de coordenadas GPS"""
-        patron = r'^-?\d+\.?\d*,\s*-?\d+\.?\d*$'
+        if not coordenadas or not coordenadas.strip():
+            return False
+        
+        patron = r'^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$'
         return bool(re.match(patron, coordenadas.strip()))
     
     @staticmethod
@@ -140,6 +167,11 @@ class ValidadorDatos:
             
         except Exception as e:
             return False, f"Error al procesar imagen: {str(e)}"
+    
+    @staticmethod
+    def validar_peso(peso: float) -> bool:
+        """Valida que el peso esté en un rango razonable"""
+        return 0.1 <= peso <= 1000.0
 
 class GestorDatos:
     """Gestor principal de datos"""
@@ -161,6 +193,10 @@ class GestorDatos:
             df_zonas = pd.read_csv(Config.ARCHIVO_ZONAS_CRITICAS)
             df_encuestas = pd.read_csv(Config.ARCHIVO_ENCUESTAS)
             
+            if df_residuos.empty or df_zonas.empty or df_encuestas.empty:
+                logger.warning("Algunos datasets están vacíos, recreando...")
+                return DatasetManager.crear_datasets_iniciales()
+            
             return df_residuos, df_zonas, df_encuestas
             
         except Exception as e:
@@ -174,59 +210,77 @@ class GestorDatos:
         try:
             if os.path.exists(Config.ARCHIVO_RESIDUOS):
                 df = pd.read_csv(Config.ARCHIVO_RESIDUOS)
-                df.to_csv(Config.ARCHIVO_BACKUP, index=False)
-                logger.info("Backup creado exitosamente")
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                backup_file = f"backup_residuos_{timestamp}.csv"
+                df.to_csv(backup_file, index=False)
+                logger.info(f"Backup creado: {backup_file}")
+                return backup_file
         except Exception as e:
             logger.error(f"Error creando backup: {e}")
+            return None
 
 class VisualizadorDatos:
     """Clase para visualización de datos"""
     
     @staticmethod
-    def crear_mapa_residuos(df_residuos: pd.DataFrame, df_zonas: pd.DataFrame) -> folium.Map:
+    def crear_mapa_residuos(df_residuos: pd.DataFrame, df_zonas: pd.DataFrame):
         """Crea mapa interactivo con residuos y zonas críticas"""
-        mapa = folium.Map(
-            location=Config.COORDENADAS_CENTRO,
-            zoom_start=16,
-            tiles='OpenStreetMap'
-        )
+        if not FOLIUM_AVAILABLE:
+            st.error("🗺️ Funcionalidad de mapas no disponible. Instale folium para habilitar mapas.")
+            return None
         
-        # Agregar marcadores de residuos
-        for _, row in df_residuos.iterrows():
-            try:
-                coords = row['Ubicación (GPS)'].split(',')
-                lat, lon = float(coords[0].strip()), float(coords[1].strip())
-                
-                # Color según tipo de residuo
-                color_map = {
-                    'Plástico': 'blue',
-                    'Orgánico': 'green',
-                    'Vidrio/Metal': 'red',
-                    'Papel/Cartón': 'orange',
-                    'Otros': 'purple'
-                }
-                
-                folium.Marker(
-                    [lat, lon],
-                    popup=f"""
-                    <b>ID:</b> {row['ID']}<br>
-                    <b>Zona:</b> {row['Zona']}<br>
-                    <b>Tipo:</b> {row['Tipo de residuo']}<br>
-                    <b>Peso:</b> {row['Peso estimado (kg)']} kg<br>
-                    <b>Fecha:</b> {row['Fecha de registro']}<br>
-                    <b>Observaciones:</b> {row['Observaciones']}
-                    """,
-                    tooltip=f"Residuo {row['ID']} - {row['Tipo de residuo']}",
-                    icon=folium.Icon(
-                        color=color_map.get(row['Tipo de residuo'], 'gray'),
-                        icon='trash'
-                    )
-                ).add_to(mapa)
-                
-            except Exception as e:
-                logger.warning(f"Error procesando coordenadas para residuo {row['ID']}: {e}")
-        
-        return mapa
+        try:
+            mapa = folium.Map(
+                location=Config.COORDENADAS_CENTRO,
+                zoom_start=16,
+                tiles='OpenStreetMap'
+            )
+            
+            # Agregar marcadores de residuos
+            for _, row in df_residuos.iterrows():
+                try:
+                    coords = row['Ubicación (GPS)'].split(',')
+                    if len(coords) != 2:
+                        continue
+                        
+                    lat, lon = float(coords[0].strip()), float(coords[1].strip())
+                    
+                    # Color según tipo de residuo
+                    color_map = {
+                        'Plástico': 'blue',
+                        'Orgánico': 'green',
+                        'Vidrio/Metal': 'red',
+                        'Papel/Cartón': 'orange',
+                        'Otros': 'purple'
+                    }
+                    
+                    folium.Marker(
+                        [lat, lon],
+                        popup=f"""
+                        <b>ID:</b> {row['ID']}<br>
+                        <b>Zona:</b> {row['Zona']}<br>
+                        <b>Tipo:</b> {row['Tipo de residuo']}<br>
+                        <b>Peso:</b> {row['Peso estimado (kg)']} kg<br>
+                        <b>Fecha:</b> {row['Fecha de registro']}<br>
+                        <b>Observaciones:</b> {row['Observaciones']}
+                        """,
+                        tooltip=f"Residuo {row['ID']} - {row['Tipo de residuo']}",
+                        icon=folium.Icon(
+                            color=color_map.get(row['Tipo de residuo'], 'gray'),
+                            icon='trash'
+                        )
+                    ).add_to(mapa)
+                    
+                except (ValueError, IndexError) as e:
+                    logger.warning(f"Error procesando coordenadas para residuo {row['ID']}: {e}")
+                    continue
+            
+            return mapa
+            
+        except Exception as e:
+            logger.error(f"Error creando mapa: {e}")
+            st.error(f"Error al crear mapa: {e}")
+            return None
     
     @staticmethod
     def crear_dashboard_metricas(df_residuos: pd.DataFrame, df_zonas: pd.DataFrame, df_encuestas: pd.DataFrame):
@@ -235,20 +289,79 @@ class VisualizadorDatos:
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            total_residuos = len(df_residuos)
-            st.metric("Total Residuos", total_residuos)
+            total_residuos = len(df_residuos) if not df_residuos.empty else 0
+            st.metric("🗑️ Total Residuos", total_residuos)
         
         with col2:
-            peso_total = df_residuos['Peso estimado (kg)'].sum()
-            st.metric("Peso Total", f"{peso_total:.1f} kg")
+            peso_total = df_residuos['Peso estimado (kg)'].sum() if not df_residuos.empty else 0
+            st.metric("⚖️ Peso Total", f"{peso_total:.1f} kg")
         
         with col3:
-            zonas_criticas = len(df_zonas[df_zonas['Nivel de Riesgo'] == 'Alto'])
-            st.metric("Zonas Críticas", zonas_criticas)
+            zonas_criticas = len(df_zonas[df_zonas['Nivel de Riesgo'] == 'Alto']) if not df_zonas.empty else 0
+            st.metric("⚠️ Zonas Críticas", zonas_criticas)
         
         with col4:
-            satisfaccion = (df_encuestas['Sistema_Gestion_Mejoraria'] == 'Sí').mean() * 100
-            st.metric("Apoyo al Proyecto", f"{satisfaccion:.0f}%")
+            if not df_encuestas.empty:
+                satisfaccion = (df_encuestas['Sistema_Gestion_Mejoraria'] == 'Sí').mean() * 100
+            else:
+                satisfaccion = 0
+            st.metric("👥 Apoyo al Proyecto", f"{satisfaccion:.0f}%")
+
+    @staticmethod
+    def crear_mapa_alternativo(df_residuos: pd.DataFrame):
+        """Crea visualización alternativa cuando folium no está disponible"""
+        st.subheader("📍 Ubicaciones de Residuos (Vista de Coordenadas)")
+        
+        if df_residuos.empty:
+            st.info("No hay datos de residuos para mostrar")
+            return
+        
+        # Extraer coordenadas para visualización
+        coords_data = []
+        for _, row in df_residuos.iterrows():
+            try:
+                coords = row['Ubicación (GPS)'].split(',')
+                if len(coords) == 2:
+                    lat, lon = float(coords[0].strip()), float(coords[1].strip())
+                    coords_data.append({
+                        'ID': row['ID'],
+                        'Latitud': lat,
+                        'Longitud': lon,
+                        'Tipo': row['Tipo de residuo'],
+                        'Zona': row['Zona'],
+                        'Peso': row['Peso estimado (kg)']
+                    })
+            except (ValueError, IndexError):
+                continue
+        
+        if coords_data:
+            df_coords = pd.DataFrame(coords_data)
+            
+            # Gráfico de dispersión como alternativa al mapa
+            fig = px.scatter(
+                df_coords,
+                x='Longitud',
+                y='Latitud',
+                color='Tipo',
+                size='Peso',
+                hover_data=['ID', 'Zona'],
+                title="Distribución Geográfica de Residuos",
+                labels={'Longitud': 'Longitud (°)', 'Latitud': 'Latitud (°)'}
+            )
+            
+            fig.update_layout(
+                xaxis_title="Longitud",
+                yaxis_title="Latitud",
+                height=500
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Tabla de coordenadas
+            st.subheader("📋 Tabla de Coordenadas")
+            st.dataframe(df_coords, use_container_width=True)
+        else:
+            st.warning("No se pudieron procesar las coordenadas GPS")
 
 def main():
     """Función principal de la aplicación"""
@@ -263,17 +376,19 @@ def main():
     
     # Título principal
     st.title("🌳 Sistema de Gestión de Residuos - Parque La Amistad")
+    st.markdown("### Proyecto 'Amistad Sostenible' - Gestión Inteligente de Residuos")
     st.markdown("---")
     
-    # Cargar datos
-    df_residuos, df_zonas_criticas, df_encuestas = GestorDatos.cargar_datos()
-    
-    if df_residuos.empty:
-        st.error("No se pudieron cargar los datos. Verifique los archivos.")
-        return
+    try:
+        df_residuos, df_zonas_criticas, df_encuestas = GestorDatos.cargar_datos()
+    except Exception as e:
+        st.error(f"Error crítico al cargar datos: {e}")
+        st.stop()
     
     # Sidebar para navegación
     st.sidebar.title("📊 Navegación")
+    st.sidebar.markdown("---")
+    
     opcion = st.sidebar.selectbox(
         "Seleccione una opción:",
         [
@@ -284,178 +399,134 @@ def main():
             "📋 Encuestas Comunitarias",
             "➕ Registrar Residuo",
             "🔍 Consultar Datos",
+            "✏️ Editar Registros",
             "📈 Reportes y Estadísticas"
         ]
     )
     
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### ℹ️ Información del Sistema")
+    st.sidebar.info(f"""
+    **Registros:** {len(df_residuos)}
+    **Zonas Críticas:** {len(df_zonas_criticas)}
+    **Encuestas:** {len(df_encuestas)}
+    **Mapas:** {'✅' if FOLIUM_AVAILABLE else '❌'}
+    """)
+
     # Dashboard Principal
     if opcion == "🏠 Dashboard Principal":
-        st.header("Dashboard Principal")
+        st.header("🏠 Dashboard Principal")
         
         # Métricas principales
         VisualizadorDatos.crear_dashboard_metricas(df_residuos, df_zonas_criticas, df_encuestas)
         
         st.markdown("---")
         
-        # Gráficos en columnas
+        if df_residuos.empty:
+            st.warning("⚠️ No hay datos de residuos disponibles")
+        else:
+            # Gráficos en columnas
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("📊 Distribución por Tipo de Residuo")
+                fig_tipos = px.pie(
+                    df_residuos, 
+                    names='Tipo de residuo',
+                    title="Tipos de Residuos Registrados",
+                    color_discrete_sequence=px.colors.qualitative.Set3
+                )
+                st.plotly_chart(fig_tipos, use_container_width=True)
+            
+            with col2:
+                st.subheader("🗺️ Distribución por Zona")
+                zona_counts = df_residuos.groupby('Zona').size().reset_index(name='Cantidad')
+                fig_zonas = px.bar(
+                    zona_counts,
+                    x='Zona', y='Cantidad',
+                    title="Residuos por Zona del Parque",
+                    color='Cantidad',
+                    color_continuous_scale='Viridis'
+                )
+                st.plotly_chart(fig_zonas, use_container_width=True)
+        
+        st.markdown("---")
+        st.subheader("📋 Resumen Ejecutivo")
+        
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("📊 Distribución por Tipo de Residuo")
-            fig_tipos = px.pie(
-                df_residuos, 
-                names='Tipo de residuo',
-                title="Tipos de Residuos Registrados"
-            )
-            st.plotly_chart(fig_tipos, use_container_width=True)
+            st.markdown("**🎯 Objetivos del Proyecto:**")
+            st.markdown("""
+            - Monitoreo sistemático de residuos
+            - Identificación de zonas críticas
+            - Participación comunitaria activa
+            - Mejora continua del sistema de gestión
+            """)
         
         with col2:
-            st.subheader("🗺️ Distribución por Zona")
-            fig_zonas = px.bar(
-                df_residuos.groupby('Zona').size().reset_index(name='Cantidad'),
-                x='Zona', y='Cantidad',
-                title="Residuos por Zona del Parque"
-            )
-            st.plotly_chart(fig_zonas, use_container_width=True)
+            st.markdown("**📈 Indicadores Clave:**")
+            if not df_residuos.empty:
+                tipo_mas_comun = df_residuos['Tipo de residuo'].mode().iloc[0]
+                zona_mas_afectada = df_residuos['Zona'].mode().iloc[0]
+                st.markdown(f"""
+                - Tipo más común: **{tipo_mas_comun}**
+                - Zona más afectada: **{zona_mas_afectada}**
+                - Peso promedio: **{df_residuos['Peso estimado (kg)'].mean():.1f} kg**
+                """)
     
     # Mapa Interactivo
     elif opcion == "📍 Mapa Interactivo":
-        st.header("Mapa Interactivo de Residuos")
+        st.header("📍 Mapa Interactivo de Residuos")
         
-        mapa = VisualizadorDatos.crear_mapa_residuos(df_residuos, df_zonas_criticas)
-        st_folium(mapa, width=700, height=500)
-        
-        st.info("💡 Haga clic en los marcadores para ver detalles de cada residuo")
-    
-    # Análisis de Residuos
-    elif opcion == "📊 Análisis de Residuos":
-        st.header("Análisis Detallado de Residuos")
-        
-        # Análisis temporal
-        df_residuos['Fecha de registro'] = pd.to_datetime(df_residuos['Fecha de registro'])
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("📈 Tendencia Temporal")
-            residuos_por_fecha = df_residuos.groupby('Fecha de registro').size().reset_index(name='Cantidad')
-            fig_temporal = px.line(
-                residuos_por_fecha,
-                x='Fecha de registro', y='Cantidad',
-                title="Residuos Registrados por Fecha"
-            )
-            st.plotly_chart(fig_temporal, use_container_width=True)
-        
-        with col2:
-            st.subheader("⚖️ Peso por Tipo de Residuo")
-            peso_por_tipo = df_residuos.groupby('Tipo de residuo')['Peso estimado (kg)'].sum().reset_index()
-            fig_peso = px.bar(
-                peso_por_tipo,
-                x='Tipo de residuo', y='Peso estimado (kg)',
-                title="Peso Total por Tipo de Residuo"
-            )
-            st.plotly_chart(fig_peso, use_container_width=True)
-    
-    # Zonas Críticas
-    elif opcion == "⚠️ Zonas Críticas":
-        st.header("Análisis de Zonas Críticas")
-        
-        # Mostrar tabla de zonas críticas
-        st.subheader("📋 Registro de Zonas Críticas")
-        st.dataframe(df_zonas_criticas, use_container_width=True)
-        
-        # Análisis por nivel de riesgo
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("⚠️ Distribución por Nivel de Riesgo")
-            fig_riesgo = px.pie(
-                df_zonas_criticas,
-                names='Nivel de Riesgo',
-                title="Zonas por Nivel de Riesgo",
-                color_discrete_map={'Alto': 'red', 'Medio': 'orange', 'Bajo': 'green'}
-            )
-            st.plotly_chart(fig_riesgo, use_container_width=True)
-        
-        with col2:
-            st.subheader("🏷️ Tipos de Residuos Predominantes")
-            fig_tipos_criticos = px.bar(
-                df_zonas_criticas.groupby('Tipo de Residuos Predominantes').size().reset_index(name='Cantidad'),
-                x='Tipo de Residuos Predominantes', y='Cantidad',
-                title="Tipos de Residuos en Zonas Críticas"
-            )
-            st.plotly_chart(fig_tipos_criticos, use_container_width=True)
-    
-    # Encuestas Comunitarias
-    elif opcion == "📋 Encuestas Comunitarias":
-        st.header("Análisis de Encuestas Comunitarias")
-        
-        # Métricas de encuestas
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            total_respuestas = len(df_encuestas)
-            st.metric("Total Respuestas", total_respuestas)
-        
-        with col2:
-            apoyo_proyecto = (df_encuestas['Proyecto_Cambio_Positivo'] == 'Sí').mean() * 100
-            st.metric("Apoyo al Proyecto", f"{apoyo_proyecto:.0f}%")
-        
-        with col3:
-            dispuestos_promover = (df_encuestas['Dispuesto_Promover'] == 'Sí').mean() * 100
-            st.metric("Dispuestos a Promover", f"{dispuestos_promover:.0f}%")
-        
-        # Gráficos de análisis
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("📊 Frecuencia de Visitas")
-            fig_frecuencia = px.pie(
-                df_encuestas,
-                names='Frecuencia_Visita',
-                title="Frecuencia de Visitas al Parque"
-            )
-            st.plotly_chart(fig_frecuencia, use_container_width=True)
-        
-        with col2:
-            st.subheader("🗳️ Opiniones sobre Tachos de Basura")
-            fig_tachos = px.pie(
-                df_encuestas,
-                names='Tachos_Bien_Distribuidos',
-                title="¿Están bien distribuidos los tachos?"
-            )
-            st.plotly_chart(fig_tachos, use_container_width=True)
-    
+        if FOLIUM_AVAILABLE and not df_residuos.empty:
+            mapa = VisualizadorDatos.crear_mapa_residuos(df_residuos, df_zonas_criticas)
+            if mapa:
+                st_folium(mapa, width=700, height=500)
+                st.info("💡 Haga clic en los marcadores para ver detalles de cada residuo")
+        else:
+            VisualizadorDatos.crear_mapa_alternativo(df_residuos)
+
+
     # Registrar Residuo
     elif opcion == "➕ Registrar Residuo":
-        st.header("Registrar Nuevo Residuo")
+        st.header("➕ Registrar Nuevo Residuo")
         
         with st.form("form_registro"):
             col1, col2 = st.columns(2)
             
             with col1:
-                zona = st.selectbox("Zona del Parque", Config.ZONAS_PARQUE)
-                tipo_residuo = st.selectbox("Tipo de Residuo", Config.TIPOS_RESIDUOS)
-                peso = st.number_input("Peso Estimado (kg)", min_value=0.1, max_value=100.0, step=0.1)
-                coordenadas = st.text_input("Coordenadas GPS", placeholder="-8.111, -79.028")
+                zona = st.selectbox("🗺️ Zona del Parque", Config.ZONAS_PARQUE)
+                tipo_residuo = st.selectbox("🗑️ Tipo de Residuo", Config.TIPOS_RESIDUOS)
+                peso = st.number_input("⚖️ Peso Estimado (kg)", min_value=0.1, max_value=100.0, step=0.1, value=1.0)
+                coordenadas = st.text_input("📍 Coordenadas GPS", placeholder="-8.111, -79.028", help="Formato: latitud, longitud")
             
             with col2:
-                fecha = st.date_input("Fecha de Registro", value=date.today())
-                observaciones = st.text_area("Observaciones", height=100)
-                imagen = st.file_uploader("Imagen (opcional)", type=Config.FORMATOS_IMAGEN)
+                fecha = st.date_input("📅 Fecha de Registro", value=date.today())
+                observaciones = st.text_area("📝 Observaciones", height=100, placeholder="Describa la ubicación y condiciones del residuo...")
+                imagen = st.file_uploader("📷 Imagen (opcional)", type=Config.FORMATOS_IMAGEN)
             
-            submitted = st.form_submit_button("🗂️ Registrar Residuo")
+            if imagen:
+                st.subheader("🖼️ Preview de Imagen")
+                st.image(imagen, caption="Imagen a registrar", width=300)
+            
+            submitted = st.form_submit_button("🗂️ Registrar Residuo", type="primary")
             
             if submitted:
-                # Validaciones
                 errores = []
                 
                 if not ValidadorDatos.validar_coordenadas_gps(coordenadas):
-                    errores.append("Formato de coordenadas GPS inválido")
+                    errores.append("❌ Formato de coordenadas GPS inválido. Use formato: -8.111, -79.028")
+                
+                if not ValidadorDatos.validar_peso(peso):
+                    errores.append("❌ El peso debe estar entre 0.1 y 1000.0 kg")
                 
                 valido_imagen, error_imagen = ValidadorDatos.validar_imagen(imagen)
                 if not valido_imagen:
-                    errores.append(error_imagen)
+                    errores.append(f"❌ {error_imagen}")
+                
+                if not observaciones.strip():
+                    errores.append("❌ Las observaciones son obligatorias")
                 
                 if errores:
                     for error in errores:
@@ -463,7 +534,7 @@ def main():
                 else:
                     try:
                         # Crear backup
-                        GestorDatos.crear_backup()
+                        backup_file = GestorDatos.crear_backup()
                         
                         # Nuevo registro
                         nuevo_id = df_residuos['ID'].max() + 1 if not df_residuos.empty else 1
@@ -471,11 +542,11 @@ def main():
                         nuevo_registro = {
                             'ID': nuevo_id,
                             'Zona': zona,
-                            'Ubicación (GPS)': coordenadas,
+                            'Ubicación (GPS)': coordenadas.strip(),
                             'Tipo de residuo': tipo_residuo,
                             'Peso estimado (kg)': peso,
                             'Fecha de registro': fecha.strftime('%Y-%m-%d'),
-                            'Observaciones': observaciones
+                            'Observaciones': observaciones.strip()
                         }
                         
                         # Agregar al DataFrame
@@ -485,137 +556,18 @@ def main():
                         df_residuos.to_csv(Config.ARCHIVO_RESIDUOS, index=False)
                         
                         st.success(f"✅ Residuo registrado exitosamente con ID: {nuevo_id}")
+                        if backup_file:
+                            st.info(f"💾 Backup creado: {backup_file}")
+                        
                         logger.info(f"Nuevo residuo registrado: ID {nuevo_id}")
                         
-                        # Mostrar preview de imagen si existe
-                        if imagen:
-                            st.image(imagen, caption="Imagen registrada", width=300)
+                        if st.button("➕ Registrar Otro Residuo"):
+                            st.experimental_rerun()
                         
                     except Exception as e:
-                        st.error(f"Error al registrar: {e}")
+                        st.error(f"❌ Error al registrar: {e}")
                         logger.error(f"Error en registro: {e}")
-    
-    # Consultar Datos
-    elif opcion == "🔍 Consultar Datos":
-        st.header("Consultar y Filtrar Datos")
-        
-        # Filtros
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            filtro_zona = st.multiselect("Filtrar por Zona", Config.ZONAS_PARQUE, default=Config.ZONAS_PARQUE)
-        
-        with col2:
-            filtro_tipo = st.multiselect("Filtrar por Tipo", Config.TIPOS_RESIDUOS, default=Config.TIPOS_RESIDUOS)
-        
-        with col3:
-            rango_fechas = st.date_input("Rango de Fechas", value=[date.today(), date.today()])
-        
-        # Aplicar filtros
-        df_filtrado = df_residuos.copy()
-        df_filtrado['Fecha de registro'] = pd.to_datetime(df_filtrado['Fecha de registro'])
-        
-        if filtro_zona:
-            df_filtrado = df_filtrado[df_filtrado['Zona'].isin(filtro_zona)]
-        
-        if filtro_tipo:
-            df_filtrado = df_filtrado[df_filtrado['Tipo de residuo'].isin(filtro_tipo)]
-        
-        if len(rango_fechas) == 2:
-            fecha_inicio, fecha_fin = rango_fechas
-            df_filtrado = df_filtrado[
-                (df_filtrado['Fecha de registro'].dt.date >= fecha_inicio) &
-                (df_filtrado['Fecha de registro'].dt.date <= fecha_fin)
-            ]
-        
-        # Mostrar resultados
-        st.subheader(f"📋 Resultados ({len(df_filtrado)} registros)")
-        
-        if not df_filtrado.empty:
-            st.dataframe(df_filtrado, use_container_width=True)
-            
-            # Botón de descarga
-            csv = df_filtrado.to_csv(index=False)
-            st.download_button(
-                label="📥 Descargar datos filtrados",
-                data=csv,
-                file_name=f"residuos_filtrados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv"
-            )
-        else:
-            st.info("No se encontraron registros con los filtros aplicados")
-    
-    # Reportes y Estadísticas
-    elif opcion == "📈 Reportes y Estadísticas":
-        st.header("Reportes y Estadísticas Avanzadas")
-        
-        # Estadísticas generales
-        st.subheader("📊 Estadísticas Generales")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("**Resumen de Residuos:**")
-            st.write(f"- Total de registros: {len(df_residuos)}")
-            st.write(f"- Peso total: {df_residuos['Peso estimado (kg)'].sum():.2f} kg")
-            st.write(f"- Peso promedio: {df_residuos['Peso estimado (kg)'].mean():.2f} kg")
-            st.write(f"- Tipo más común: {df_residuos['Tipo de residuo'].mode().iloc[0]}")
-            st.write(f"- Zona más afectada: {df_residuos['Zona'].mode().iloc[0]}")
-        
-        with col2:
-            st.write("**Resumen de Encuestas:**")
-            st.write(f"- Total de respuestas: {len(df_encuestas)}")
-            apoyo = (df_encuestas['Sistema_Gestion_Mejoraria'] == 'Sí').mean() * 100
-            st.write(f"- Apoyo al sistema: {apoyo:.1f}%")
-            promover = (df_encuestas['Dispuesto_Promover'] == 'Sí').mean() * 100
-            st.write(f"- Dispuestos a promover: {promover:.1f}%")
-            tachos = (df_encuestas['Tachos_Bien_Distribuidos'] == 'Sí').mean() * 100
-            st.write(f"- Satisfacción con tachos: {tachos:.1f}%")
-        
-        st.markdown("---")
-        
-        # Gráfico combinado
-        st.subheader("📈 Análisis Temporal y Comparativo")
-        
-        # Crear subplots
-        fig = make_subplots(
-            rows=2, cols=2,
-            subplot_titles=('Residuos por Fecha', 'Peso por Zona', 'Nivel de Riesgo', 'Apoyo Comunitario'),
-            specs=[[{"secondary_y": False}, {"secondary_y": False}],
-                   [{"type": "pie"}, {"type": "pie"}]]
-        )
-        
-        # Gráfico 1: Residuos por fecha
-        df_residuos['Fecha de registro'] = pd.to_datetime(df_residuos['Fecha de registro'])
-        residuos_fecha = df_residuos.groupby('Fecha de registro').size().reset_index(name='Cantidad')
-        fig.add_trace(
-            go.Scatter(x=residuos_fecha['Fecha de registro'], y=residuos_fecha['Cantidad'], name="Residuos"),
-            row=1, col=1
-        )
-        
-        # Gráfico 2: Peso por zona
-        peso_zona = df_residuos.groupby('Zona')['Peso estimado (kg)'].sum().reset_index()
-        fig.add_trace(
-            go.Bar(x=peso_zona['Zona'], y=peso_zona['Peso estimado (kg)'], name="Peso"),
-            row=1, col=2
-        )
-        
-        # Gráfico 3: Nivel de riesgo
-        riesgo_counts = df_zonas_criticas['Nivel de Riesgo'].value_counts()
-        fig.add_trace(
-            go.Pie(labels=riesgo_counts.index, values=riesgo_counts.values, name="Riesgo"),
-            row=2, col=1
-        )
-        
-        # Gráfico 4: Apoyo comunitario
-        apoyo_counts = df_encuestas['Sistema_Gestion_Mejoraria'].value_counts()
-        fig.add_trace(
-            go.Pie(labels=apoyo_counts.index, values=apoyo_counts.values, name="Apoyo"),
-            row=2, col=2
-        )
-        
-        fig.update_layout(height=600, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+
 
 if __name__ == "__main__":
     main()
