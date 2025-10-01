@@ -44,10 +44,6 @@ La aplicación incluye 5 secciones principales:
 
 Este proyecto está diseñado para apoyar la investigación académica y la gestión ambiental comunitaria. Las contribuciones son bienvenidas.
 
-## 📄 Licencia
-
-MIT License - Ver archivo LICENSE para más detalles.
-
 ## 📧 Contacto
 
 Para preguntas sobre el proyecto o colaboraciones, contacta al equipo de desarrollo.
