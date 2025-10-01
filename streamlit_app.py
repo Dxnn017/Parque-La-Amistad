@@ -775,6 +775,516 @@ def mostrar_consulta_residuos():
         logger.error(f"Error en consulta: {e}")
         st.error(f"Error al filtrar datos: {e}")
 
+# ==============================
+# FUNCIONES DE EDICIÓN Y ELIMINACIÓN (NUEVAS)
+# ==============================
+
+def mostrar_edicion_residuos():
+    """Interfaz completa para editar registros existentes"""
+    st.header("✏️ Edición de Residuos")
+    
+    df_residuos = cargar_datos_residuos()
+    
+    if df_residuos.empty:
+        st.info("📊 No hay registros disponibles para editar.")
+        return
+    
+    # Selector de registro a editar
+    st.subheader("🔍 Seleccionar Registro")
+    
+    # Crear lista de opciones con información relevante
+    opciones_registros = []
+    for _, row in df_residuos.iterrows():
+        opcion = f"ID {row['ID']} - {row['Zona']} - {row['Tipo de residuo']} ({row['Peso estimado (kg)']} kg)"
+        opciones_registros.append(opcion)
+    
+    registro_seleccionado = st.selectbox(
+        "Seleccione el registro a editar:",
+        opciones_registros,
+        help="Seleccione el registro que desea modificar"
+    )
+    
+    if registro_seleccionado:
+        # Extraer ID del registro seleccionado
+        id_seleccionado = int(registro_seleccionado.split(' ')[1])
+        registro_actual = df_residuos[df_residuos['ID'] == id_seleccionado].iloc[0]
+        
+        # Mostrar información actual
+        with st.expander("📋 Información Actual del Registro", expanded=True):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write(f"**ID:** {registro_actual['ID']}")
+                st.write(f"**Zona:** {registro_actual['Zona']}")
+                st.write(f"**Tipo:** {registro_actual['Tipo de residuo']}")
+            with col2:
+                st.write(f"**Peso:** {registro_actual['Peso estimado (kg)']} kg")
+                st.write(f"**Ubicación:** {registro_actual['Ubicación (GPS)']}")
+                st.write(f"**Fecha:** {registro_actual['Fecha de registro']}")
+            with col3:
+                st.write(f"**Estado:** {registro_actual.get('Estado', 'Activo')}")
+                if registro_actual.get('Ruta Imagen') and os.path.exists(registro_actual['Ruta Imagen']):
+                    st.write("**Imagen:** ✅ Disponible")
+                    try:
+                        img = Image.open(registro_actual['Ruta Imagen'])
+                        st.image(img, width=200)
+                    except:
+                        pass
+        
+        # Formulario de edición
+        st.subheader("✏️ Editar Información")
+        
+        with st.form("editar_residuo"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                nueva_zona = st.selectbox(
+                    "🌍 Zona *:",
+                    Config.ZONAS_VALIDAS,
+                    index=Config.ZONAS_VALIDAS.index(registro_actual['Zona']) if registro_actual['Zona'] in Config.ZONAS_VALIDAS else 0
+                )
+                
+                nuevo_tipo = st.selectbox(
+                    "🗂️ Tipo de Residuo *:",
+                    Config.TIPOS_RESIDUO,
+                    index=Config.TIPOS_RESIDUO.index(registro_actual['Tipo de residuo']) if registro_actual['Tipo de residuo'] in Config.TIPOS_RESIDUO else 0
+                )
+                
+                nuevo_peso = st.number_input(
+                    "⚖️ Peso estimado (kg) *:",
+                    min_value=Config.PESO_MIN,
+                    max_value=Config.PESO_MAX,
+                    value=float(registro_actual['Peso estimado (kg)']),
+                    step=0.1
+                )
+            
+            with col2:
+                nueva_ubicacion = st.text_input(
+                    "📍 Ubicación GPS *:",
+                    value=registro_actual['Ubicación (GPS)']
+                )
+                
+                # Convertir fecha actual a date object
+                fecha_actual = pd.to_datetime(registro_actual['Fecha de registro']).date() if pd.notna(registro_actual['Fecha de registro']) else datetime.now().date()
+                nueva_fecha = st.date_input(
+                    "📅 Fecha de registro *:",
+                    value=fecha_actual,
+                    max_value=datetime.now().date()
+                )
+                
+                nuevo_estado = st.selectbox(
+                    "📊 Estado:",
+                    ['Activo', 'Procesado', 'Archivado'],
+                    index=['Activo', 'Procesado', 'Archivado'].index(registro_actual.get('Estado', 'Activo')) if registro_actual.get('Estado', 'Activo') in ['Activo', 'Procesado', 'Archivado'] else 0
+                )
+            
+            nuevas_observaciones = st.text_area(
+                "📝 Observaciones:",
+                value=registro_actual.get('Observaciones', '')
+            )
+            
+            # Opción para cambiar imagen
+            st.subheader("📸 Actualizar Evidencia Fotográfica")
+            cambiar_imagen = st.checkbox("¿Desea cambiar la imagen?")
+            
+            nueva_imagen = None
+            if cambiar_imagen:
+                nueva_imagen = st.file_uploader(
+                    "Subir nueva imagen:",
+                    type=Config.IMAGEN_TIPOS
+                )
+                if nueva_imagen:
+                    try:
+                        img_preview = Image.open(nueva_imagen)
+                        st.image(img_preview, caption="Vista previa de la nueva imagen", width=300)
+                    except Exception as e:
+                        st.error(f"Error al mostrar vista previa: {e}")
+            
+            # Botones de acción
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col2:
+                submitted = st.form_submit_button(
+                    "💾 Guardar Cambios",
+                    type="primary",
+                    use_container_width=True
+                )
+            
+            if submitted:
+                # Validar datos
+                es_valido, mensaje_error = validar_registro_completo(
+                    nueva_zona, nueva_ubicacion, nuevo_tipo, nuevo_peso, nueva_fecha, nueva_imagen
+                )
+                
+                if not es_valido:
+                    st.error(f"❌ {mensaje_error}")
+                else:
+                    try:
+                        # Actualizar registro
+                        df_residuos.loc[df_residuos['ID'] == id_seleccionado, 'Zona'] = nueva_zona
+                        df_residuos.loc[df_residuos['ID'] == id_seleccionado, 'Tipo de residuo'] = nuevo_tipo
+                        df_residuos.loc[df_residuos['ID'] == id_seleccionado, 'Peso estimado (kg)'] = nuevo_peso
+                        df_residuos.loc[df_residuos['ID'] == id_seleccionado, 'Ubicación (GPS)'] = nueva_ubicacion
+                        df_residuos.loc[df_residuos['ID'] == id_seleccionado, 'Fecha de registro'] = nueva_fecha.strftime('%Y-%m-%d')
+                        df_residuos.loc[df_residuos['ID'] == id_seleccionado, 'Observaciones'] = nuevas_observaciones
+                        df_residuos.loc[df_residuos['ID'] == id_seleccionado, 'Estado'] = nuevo_estado
+                        
+                        # Actualizar imagen si se cambió
+                        if cambiar_imagen and nueva_imagen:
+                            ruta_imagen = guardar_imagen_mejorada(nueva_imagen, id_seleccionado)
+                            if ruta_imagen:
+                                df_residuos.loc[df_residuos['ID'] == id_seleccionado, 'Ruta Imagen'] = ruta_imagen
+                        
+                        # Guardar cambios
+                        if guardar_datos_residuos(df_residuos):
+                            st.success("✅ ¡Registro actualizado exitosamente!")
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.error("❌ Error al guardar los cambios.")
+                    
+                    except Exception as e:
+                        logger.error(f"Error actualizando registro: {e}")
+                        st.error(f"❌ Error inesperado: {e}")
+
+def mostrar_eliminacion_residuos():
+    """Interfaz completa para eliminar registros"""
+    st.header("🗑️ Eliminación de Residuos")
+    
+    df_residuos = cargar_datos_residuos()
+    
+    if df_residuos.empty:
+        st.info("📊 No hay registros disponibles para eliminar.")
+        return
+    
+    # Advertencia
+    st.warning("⚠️ **Advertencia:** La eliminación de registros es permanente y no se puede deshacer. Use con precaución.")
+    
+    # Selector de registro a eliminar
+    st.subheader("🔍 Seleccionar Registro")
+    
+    # Crear lista de opciones
+    opciones_registros = []
+    for _, row in df_residuos.iterrows():
+        opcion = f"ID {row['ID']} - {row['Zona']} - {row['Tipo de residuo']} ({row['Peso estimado (kg)']} kg) - {row['Fecha de registro']}"
+        opciones_registros.append(opcion)
+    
+    registro_seleccionado = st.selectbox(
+        "Seleccione el registro a eliminar:",
+        opciones_registros,
+        help="Seleccione el registro que desea eliminar permanentemente"
+    )
+    
+    if registro_seleccionado:
+        # Extraer ID
+        id_seleccionado = int(registro_seleccionado.split(' ')[1])
+        registro_actual = df_residuos[df_residuos['ID'] == id_seleccionado].iloc[0]
+        
+        # Mostrar información del registro
+        with st.expander("📋 Información del Registro a Eliminar", expanded=True):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write(f"**ID:** {registro_actual['ID']}")
+                st.write(f"**Zona:** {registro_actual['Zona']}")
+                st.write(f"**Tipo:** {registro_actual['Tipo de residuo']}")
+                st.write(f"**Peso:** {registro_actual['Peso estimado (kg)']} kg")
+            
+            with col2:
+                st.write(f"**Ubicación:** {registro_actual['Ubicación (GPS)']}")
+                st.write(f"**Fecha:** {registro_actual['Fecha de registro']}")
+                st.write(f"**Observaciones:** {registro_actual.get('Observaciones', 'N/A')}")
+            
+            # Mostrar imagen si existe
+            if registro_actual.get('Ruta Imagen') and os.path.exists(registro_actual['Ruta Imagen']):
+                try:
+                    img = Image.open(registro_actual['Ruta Imagen'])
+                    st.image(img, caption="Evidencia fotográfica", width=300)
+                except:
+                    pass
+        
+        # Confirmación de eliminación
+        st.subheader("⚠️ Confirmar Eliminación")
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col2:
+            confirmar = st.checkbox(
+                "Confirmo que deseo eliminar este registro permanentemente",
+                help="Marque esta casilla para habilitar el botón de eliminación"
+            )
+            
+            if confirmar:
+                if st.button(
+                    "🗑️ ELIMINAR REGISTRO",
+                    type="primary",
+                    use_container_width=True
+                ):
+                    try:
+                        # Crear backup antes de eliminar
+                        crear_backup_datos()
+                        
+                        # Eliminar imagen asociada si existe
+                        if registro_actual.get('Ruta Imagen') and os.path.exists(registro_actual['Ruta Imagen']):
+                            try:
+                                os.remove(registro_actual['Ruta Imagen'])
+                                logger.info(f"Imagen eliminada: {registro_actual['Ruta Imagen']}")
+                            except Exception as e:
+                                logger.warning(f"No se pudo eliminar la imagen: {e}")
+                        
+                        # Eliminar registro del DataFrame
+                        df_residuos = df_residuos[df_residuos['ID'] != id_seleccionado]
+                        
+                        # Guardar cambios
+                        if guardar_datos_residuos(df_residuos):
+                            st.success(f"✅ Registro ID {id_seleccionado} eliminado exitosamente.")
+                            st.info("💾 Se ha creado un backup automático antes de la eliminación.")
+                            st.rerun()
+                        else:
+                            st.error("❌ Error al guardar los cambios.")
+                    
+                    except Exception as e:
+                        logger.error(f"Error eliminando registro: {e}")
+                        st.error(f"❌ Error inesperado: {e}")
+            else:
+                st.info("👆 Marque la casilla de confirmación para habilitar la eliminación.")
+
+def mostrar_reportes_estadisticas():
+    """Interfaz completa de reportes y estadísticas avanzadas"""
+    st.header("📊 Reportes y Estadísticas Avanzadas")
+    
+    df_residuos = cargar_datos_residuos()
+    
+    if df_residuos.empty:
+        st.info("📊 No hay datos disponibles para generar reportes.")
+        return
+    
+    # Tabs para diferentes tipos de reportes
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📈 Análisis General",
+        "🗺️ Análisis por Zona",
+        "📅 Análisis Temporal",
+        "📥 Exportar Reportes"
+    ])
+    
+    with tab1:
+        st.subheader("📈 Análisis General de Residuos")
+        
+        # Métricas principales
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Registros", f"{len(df_residuos):,}")
+        with col2:
+            st.metric("Peso Total", f"{df_residuos['Peso estimado (kg)'].sum():,.1f} kg")
+        with col3:
+            st.metric("Peso Promedio", f"{df_residuos['Peso estimado (kg)'].mean():.2f} kg")
+        with col4:
+            st.metric("Zonas Afectadas", df_residuos['Zona'].nunique())
+        
+        # Gráficos comparativos
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Distribución por tipo
+            tipo_counts = df_residuos['Tipo de residuo'].value_counts()
+            fig_tipo = px.bar(
+                x=tipo_counts.index,
+                y=tipo_counts.values,
+                title="Cantidad de Registros por Tipo de Residuo",
+                labels={'x': 'Tipo de Residuo', 'y': 'Cantidad'},
+                color=tipo_counts.values,
+                color_continuous_scale='Greens'
+            )
+            st.plotly_chart(fig_tipo, use_container_width=True)
+        
+        with col2:
+            # Peso por tipo
+            peso_tipo = df_residuos.groupby('Tipo de residuo')['Peso estimado (kg)'].sum().sort_values(ascending=False)
+            fig_peso = px.bar(
+                x=peso_tipo.index,
+                y=peso_tipo.values,
+                title="Peso Total por Tipo de Residuo (kg)",
+                labels={'x': 'Tipo de Residuo', 'y': 'Peso (kg)'},
+                color=peso_tipo.values,
+                color_continuous_scale='Reds'
+            )
+            st.plotly_chart(fig_peso, use_container_width=True)
+        
+        # Tabla de resumen por tipo
+        st.subheader("📋 Resumen Detallado por Tipo")
+        resumen_tipo = df_residuos.groupby('Tipo de residuo').agg({
+            'ID': 'count',
+            'Peso estimado (kg)': ['sum', 'mean', 'min', 'max']
+        }).round(2)
+        resumen_tipo.columns = ['Cantidad', 'Peso Total (kg)', 'Peso Promedio (kg)', 'Peso Mínimo (kg)', 'Peso Máximo (kg)']
+        st.dataframe(resumen_tipo, use_container_width=True)
+    
+    with tab2:
+        st.subheader("🗺️ Análisis por Zona del Parque")
+        
+        # Métricas por zona
+        zona_stats = df_residuos.groupby('Zona').agg({
+            'ID': 'count',
+            'Peso estimado (kg)': 'sum'
+        }).reset_index()
+        zona_stats.columns = ['Zona', 'Cantidad', 'Peso Total']
+        
+        # Gráfico de mapa de calor
+        fig_zona = px.bar(
+            zona_stats,
+            x='Zona',
+            y=['Cantidad', 'Peso Total'],
+            title="Comparación de Zonas: Cantidad vs Peso Total",
+            barmode='group',
+            color_discrete_sequence=['#2d5a27', '#ff7f0e']
+        )
+        st.plotly_chart(fig_zona, use_container_width=True)
+        
+        # Análisis detallado por zona seleccionada
+        zona_seleccionada = st.selectbox(
+            "Seleccione una zona para análisis detallado:",
+            df_residuos['Zona'].unique()
+        )
+        
+        df_zona = df_residuos[df_residuos['Zona'] == zona_seleccionada]
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Registros en Zona", len(df_zona))
+        with col2:
+            st.metric("Peso Total", f"{df_zona['Peso estimado (kg)'].sum():.1f} kg")
+        with col3:
+            tipo_predominante = df_zona['Tipo de residuo'].mode()[0] if not df_zona.empty else "N/A"
+            st.metric("Tipo Predominante", tipo_predominante)
+        
+        # Distribución de tipos en la zona
+        tipo_zona = df_zona['Tipo de residuo'].value_counts()
+        fig_tipo_zona = px.pie(
+            values=tipo_zona.values,
+            names=tipo_zona.index,
+            title=f"Distribución de Tipos de Residuo en {zona_seleccionada}",
+            hole=0.4
+        )
+        st.plotly_chart(fig_tipo_zona, use_container_width=True)
+    
+    with tab3:
+        st.subheader("📅 Análisis Temporal")
+        
+        if 'Fecha de registro' in df_residuos.columns:
+            df_residuos['Fecha de registro'] = pd.to_datetime(df_residuos['Fecha de registro'], errors='coerce')
+            df_temporal = df_residuos.dropna(subset=['Fecha de registro'])
+            
+            if not df_temporal.empty:
+                # Agregar columnas temporales
+                df_temporal['Año'] = df_temporal['Fecha de registro'].dt.year
+                df_temporal['Mes'] = df_temporal['Fecha de registro'].dt.month
+                df_temporal['Día Semana'] = df_temporal['Fecha de registro'].dt.day_name()
+                
+                # Tendencia mensual
+                mensual = df_temporal.groupby(df_temporal['Fecha de registro'].dt.to_period('M')).agg({
+                    'ID': 'count',
+                    'Peso estimado (kg)': 'sum'
+                }).reset_index()
+                mensual['Fecha de registro'] = mensual['Fecha de registro'].astype(str)
+                
+                fig_mensual = go.Figure()
+                fig_mensual.add_trace(go.Scatter(
+                    x=mensual['Fecha de registro'],
+                    y=mensual['ID'],
+                    name='Cantidad',
+                    mode='lines+markers',
+                    line=dict(color='#2d5a27', width=3)
+                ))
+                fig_mensual.add_trace(go.Scatter(
+                    x=mensual['Fecha de registro'],
+                    y=mensual['Peso estimado (kg)'],
+                    name='Peso (kg)',
+                    mode='lines+markers',
+                    line=dict(color='#ff7f0e', width=3),
+                    yaxis='y2'
+                ))
+                fig_mensual.update_layout(
+                    title="Tendencia Mensual de Residuos",
+                    xaxis_title="Mes",
+                    yaxis=dict(title="Cantidad de Registros"),
+                    yaxis2=dict(title="Peso Total (kg)", overlaying='y', side='right'),
+                    hovermode='x unified'
+                )
+                st.plotly_chart(fig_mensual, use_container_width=True)
+                
+                # Análisis por día de la semana
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    dia_semana = df_temporal['Día Semana'].value_counts()
+                    fig_dia = px.bar(
+                        x=dia_semana.index,
+                        y=dia_semana.values,
+                        title="Registros por Día de la Semana",
+                        labels={'x': 'Día', 'y': 'Cantidad'}
+                    )
+                    st.plotly_chart(fig_dia, use_container_width=True)
+                
+                with col2:
+                    mes_stats = df_temporal.groupby('Mes')['Peso estimado (kg)'].sum()
+                    fig_mes = px.line(
+                        x=mes_stats.index,
+                        y=mes_stats.values,
+                        title="Peso Total por Mes",
+                        labels={'x': 'Mes', 'y': 'Peso (kg)'},
+                        markers=True
+                    )
+                    st.plotly_chart(fig_mes, use_container_width=True)
+    
+    with tab4:
+        st.subheader("📥 Exportar Reportes")
+        
+        st.write("Genere y descargue reportes personalizados en diferentes formatos.")
+        
+        # Opciones de exportación
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            formato = st.selectbox(
+                "Formato de exportación:",
+                ["CSV", "Excel", "JSON"]
+            )
+        
+        with col2:
+            incluir_imagenes = st.checkbox("Incluir rutas de imágenes", value=True)
+        
+        # Generar reporte
+        if st.button("📥 Generar y Descargar Reporte", type="primary"):
+            try:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                
+                # Preparar datos
+                df_export = df_residuos.copy()
+                if not incluir_imagenes and 'Ruta Imagen' in df_export.columns:
+                    df_export = df_export.drop(columns=['Ruta Imagen'])
+                
+                if formato == "CSV":
+                    csv = df_export.to_csv(index=False, encoding='utf-8')
+                    st.download_button(
+                        label="📥 Descargar CSV",
+                        data=csv,
+                        file_name=f"reporte_residuos_{timestamp}.csv",
+                        mime="text/csv"
+                    )
+                
+                elif formato == "JSON":
+                    json_str = df_export.to_json(orient='records', date_format='iso', indent=2)
+                    st.download_button(
+                        label="📥 Descargar JSON",
+                        data=json_str,
+                        file_name=f"reporte_residuos_{timestamp}.json",
+                        mime="application/json"
+                    )
+                
+                st.success("✅ Reporte generado exitosamente!")
+                
+            except Exception as e:
+                st.error(f"❌ Error generando reporte: {e}")
+
 # Función principal mejorada
 def main():
     """Función principal con manejo de errores mejorado"""
@@ -791,7 +1301,7 @@ def main():
             <h1>🌳 Sistema de Gestión de Residuos Sólidos</h1>
             <h2>Parque La Amistad</h2>
             <p>Monitoreo, registro y análisis integral de residuos para la conservación ambiental</p>
-            <small>Sistema básico de registro y control de residuos</small>
+            <small>Sistema completo con operaciones CRUD</small>
         </div>
         """, unsafe_allow_html=True)
         
@@ -825,7 +1335,7 @@ def main():
         except Exception as e:
             st.sidebar.error("Error cargando info")
         
-        # Navegación entre páginas
+        # Navegación con todas las funciones CRUD implementadas
         if pagina == "📈 Dashboard Principal":
             mostrar_dashboard_principal()
         elif pagina == "📝 Registro de Residuos":
@@ -833,18 +1343,18 @@ def main():
         elif pagina == "🔍 Consulta de Residuos":
             mostrar_consulta_residuos()
         elif pagina == "✏️ Edición de Residuos":
-            st.info("🚧 Función de edición en desarrollo. Próximamente disponible.")
+            mostrar_edicion_residuos()
         elif pagina == "🗑️ Eliminación de Residuos":
-            st.info("🚧 Función de eliminación en desarrollo. Próximamente disponible.")
+            mostrar_eliminacion_residuos()
         elif pagina == "📊 Reportes y Estadísticas":
-            st.info("🚧 Reportes avanzados en desarrollo. Próximamente disponible.")
+            mostrar_reportes_estadisticas()
         
         # Footer mejorado
         st.markdown("---")
         st.markdown("""
         <div style='text-align: center; color: #666; padding: 1rem; background: #f8f9fa; border-radius: 10px; margin-top: 2rem;'>
             <p><strong>🌳 Sistema de Gestión de Residuos Sólidos - Parque La Amistad</strong></p>
-            <p><small>Desarrollado para la conservación y monitoreo ambiental comunitario</small></p>
+            <p><small>Sistema completo con operaciones CRUD - Desarrollado para la conservación ambiental</small></p>
         </div>
         """, unsafe_allow_html=True)
         
